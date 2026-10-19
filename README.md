@@ -1,28 +1,20 @@
 # Guardaian
 
-A small Go wrapper that asks a local Ollama decision model to score the risk of a shell command before executing it.
+A small Go wrapper that asks a local Ollama decision model to score the risk of a shell command before executing it. Note it has been vibe-coded so use with care.
 
 ## Features
 
 - Sends the command to Ollama using the decision API at `/v1/systemone`.
 - Evaluates a risk score between 0.0 and 1.0.
-- Allows execution when the score is below a configured threshold.
+- Allows execution when the score is below the configured threshold.
 - Requires a typed `yes` confirmation when the score is at or above the threshold.
-- Can be used as a one-off CLI or as a Bash pre-exec hook.
+- Can be used as a one-off CLI or ideally as a Bash pre-exec hook.
 
 ## Prerequisites
 
-Make sure the local Ollama service is running:
+Make sure a recent Ollama service is running, locally or in a container.
 
-```bash
-ollama serve
-```
-
-Make sure the model you want to use is pulled locally. For the current setup, this is typically:
-
-```bash
-ollama pull tev1:0.8b
-```
+Make sure a decision capable model is available. nimble-v3:9b works but requires hardware support. The very lightweight tev1:0.8b is much faster with response times well below one second on my older i7-7700.
 
 ## Build
 
