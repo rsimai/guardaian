@@ -26,3 +26,15 @@ func TestShouldAskForConfirmation(t *testing.T) {
 		t.Fatal("did not expect confirmation when score stays below threshold")
 	}
 }
+
+func TestShouldExecuteConfirmedCommand(t *testing.T) {
+	if !shouldExecuteCommand(false, 0.9, 0.7, true) {
+		t.Fatal("expected execution when the user confirms a high-risk command")
+	}
+	if shouldExecuteCommand(true, 0.9, 0.7, true) {
+		t.Fatal("did not expect execution in check-only mode even after confirmation")
+	}
+	if !shouldExecuteCommand(false, 0.4, 0.7, false) {
+		t.Fatal("expected automatic execution when the score is below threshold")
+	}
+}

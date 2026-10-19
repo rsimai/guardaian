@@ -82,6 +82,8 @@ The hook evaluates the current command before execution, including redirection f
 ls -l > myls.txt
 ```
 
+The hook uses the guard in check-only mode and then lets Bash continue with the original command once the policy check passes or a high-risk command is explicitly confirmed.
+
 ## One-off CLI usage
 
 You can also evaluate a single command directly without the shell hook:

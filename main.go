@@ -81,7 +81,7 @@ func main() {
 
 	if score < cfg.Threshold {
 		fmt.Println("Command allowed by policy.")
-		if cfg.CheckOnly {
+		if !shouldExecuteCommand(cfg.CheckOnly, score, cfg.Threshold, true) {
 			return
 		}
 		if err := runCommand(command); err != nil {
@@ -91,11 +91,12 @@ func main() {
 		return
 	}
 
-	if !confirmProceed(score, cfg.Threshold) {
+	confirmed := confirmProceed(score, cfg.Threshold)
+	if !confirmed {
 		fmt.Println("Execution blocked.")
 		os.Exit(1)
 	}
-	if cfg.CheckOnly {
+	if !shouldExecuteCommand(cfg.CheckOnly, score, cfg.Threshold, confirmed) {
 		return
 	}
 
@@ -260,6 +261,16 @@ func mapify(input map[string]any) map[string]map[string]any {
 
 func shouldAskForConfirmation(score, threshold float64) bool {
 	return score >= threshold
+}
+
+func shouldExecuteCommand(checkOnly bool, score, threshold float64, confirmed bool) bool {
+	if score < threshold {
+		return !checkOnly
+	}
+	if checkOnly {
+		return false
+	}
+	return confirmed
 }
 
 func confirmProceed(score, threshold float64) bool {
