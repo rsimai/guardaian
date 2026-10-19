@@ -19,6 +19,7 @@ import (
 const defaultModel = "tev1:0.8b"
 const defaultThreshold = 0.75
 const defaultURL = "http://localhost:11434"
+const exitCodeConfirmationRequired = 20
 
 type config struct {
 	Model     string
@@ -89,6 +90,11 @@ func main() {
 			os.Exit(1)
 		}
 		return
+	}
+
+	if cfg.CheckOnly {
+		fmt.Println("Confirmation required.")
+		os.Exit(exitCodeConfirmationRequired)
 	}
 
 	confirmed := confirmProceed(score, cfg.Threshold)

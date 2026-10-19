@@ -48,7 +48,7 @@ The important values are:
 
 ## Shell hook usage
 
-Install the hook in your current Bash session:
+Install the hook in your current interactive Bash session:
 
 ```bash
 source ./guard-shell
@@ -68,13 +68,15 @@ To re-enable it:
 guardaian-on
 ```
 
-The hook evaluates the current command before execution, including redirection forms like:
+The hook uses a Readline Return-key hook. When you press Enter, it evaluates the current line first and only executes it if policy allows it. This preserves normal Bash completion and aliases while adding a reliable approval gate for interactive commands.
+
+It supports normal command lines, including redirection forms like:
 
 ```bash
 ls -l >myls.txt
 ```
 
-The hook uses the guard in check-only mode and then lets Bash continue with the original command once the policy check passes or a high-risk command is explicitly confirmed.
+The hook runs the guard in `--check-only` mode and executes the line in the current shell only after a successful policy check. High-risk commands require an explicit `yes`; otherwise they are blocked.
 
 ## One-off CLI usage
 
@@ -90,7 +92,7 @@ When used with `--check-only`, the guard only evaluates and does not execute the
 
 ## Notes
 
-The guard sends a request to Ollama’s `/v1/systemone` endpoint with a `state` string and `questions` map. For these decision models, the result is read from the `answers.<name>.noul` probability. The shell hook uses the last command line in Bash so it can evaluate the real command string before execution.
+The guard sends a request to Ollama’s `/v1/systemone` endpoint with a `state` string and `questions` map. For these decision models, the result is read from the `answers.<name>.noul` probability. In interactive Bash, the hook evaluates `READLINE_LINE` at Enter time.
 
 The default threshold is `0.5`. Any command scoring at or above that value triggers a warning and requires the user to type `yes` before proceeding.
 
