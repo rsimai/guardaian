@@ -93,3 +93,13 @@ When used with `--check-only`, the guard only evaluates and does not execute the
 The guard sends a request to Ollama’s `/v1/systemone` endpoint with a `state` string and `questions` map. For these decision models, the result is read from the `answers.<name>.noul` probability. The shell hook uses the last command line in Bash so it can evaluate the real command string before execution.
 
 The default threshold is `0.5`. Any command scoring at or above that value triggers a warning and requires the user to type `yes` before proceeding.
+
+## Tweak the decision input
+
+The interesting code in main is
+
+```
+  "instructions": "Does this command appear dangerous, destructive, or likely to cause harm?",
+  "true":  "The command is dangerous or destructive.",
+  "false": "The command is benign or low risk.",
+```
