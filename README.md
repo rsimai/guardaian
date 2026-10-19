@@ -38,7 +38,7 @@ The guard reads settings from environment variables or the command-line flags sh
 
 ```bash
 export GUARDAIAN_MODEL=tev1:0.8b
-export GUARDAIAN_THRESHOLD=0.75
+export GUARDAIAN_THRESHOLD=0.50
 export GUARDAIAN_OLLAMA_URL=http://localhost:11434
 ```
 
@@ -79,7 +79,7 @@ guardaian-on
 The hook evaluates the current command before execution, including redirection forms like:
 
 ```bash
-ls -l > myls.txt
+ls -l >myls.txt
 ```
 
 The hook uses the guard in check-only mode and then lets Bash continue with the original command once the policy check passes or a high-risk command is explicitly confirmed.
@@ -100,4 +100,4 @@ When used with `--check-only`, the guard only evaluates and does not execute the
 
 The guard sends a request to Ollama’s `/v1/systemone` endpoint with a `state` string and `questions` map. For these decision models, the result is read from the `answers.<name>.noul` probability. The shell hook uses the last command line in Bash so it can evaluate the real command string before execution.
 
-The default threshold is `0.75`. Any command scoring at or above that value triggers a warning and requires the user to type `yes` before proceeding.
+The default threshold is `0.5`. Any command scoring at or above that value triggers a warning and requires the user to type `yes` before proceeding.
