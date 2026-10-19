@@ -1,0 +1,11 @@
+# Go build output
+/bin/
+/guard
+*.exe
+
+# Editor temp files
+.vscode/
+.DS_Store
+
+# Local environment
+.env

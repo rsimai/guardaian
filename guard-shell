@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+
+# Source this file in a bash session to install a ready-to-use guardaian hook.
+# Example:
+#   source ./guard-shell
+
+source "$(dirname "${BASH_SOURCE[0]}")/bash-hook.sh"
+guardaian-on
