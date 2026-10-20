@@ -9,6 +9,7 @@ A small Go wrapper that asks a local Ollama decision model to score the risk of 
 - Allows execution when the score is below the configured threshold.
 - Requires a typed `yes` confirmation when the score is at or above the threshold.
 - Can be used as a one-off CLI or as an interactive Bash Return-key hook.
+- Could provide additional guardrail to an obligatory policy engine
 
 ## Prerequisites
 
