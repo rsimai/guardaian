@@ -14,7 +14,7 @@ A small Go wrapper that asks a local Ollama decision model to score the risk of 
 
 Make sure a recent Ollama service is running, locally or in a container.
 
-Make sure a decision capable model is available. nimble-v3:9b works but requires hardware support. The very lightweight tev1:0.8b is much faster with response times well below one second on my older i7-7700.
+Make sure a decision capable model is available. nimble-v3:9b works but requires hardware support to be reasonably fast. The very lightweight tev1:0.8b is much faster with response times well below one second running on my older i7-7700 CPU.
 
 ## Build
 
@@ -111,10 +111,13 @@ The default threshold is `0.5`. Any command scoring at or above that value trigg
 
 ## Tweak the decision input
 
-The interesting code in main is
+The interesting code in main.go is around
 
 ```
   "instructions": "Does this command appear dangerous, destructive, or likely to cause harm?",
   "true":  "The command is dangerous or destructive.",
   "false": "The command is benign or low risk.",
 ```
+
+It currently uses two decisions for modifies_filesystem and destructive_or_hard_to_rollback and combines them. Depending on model speed it could be more for better results.
+
