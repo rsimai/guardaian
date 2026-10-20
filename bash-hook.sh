@@ -4,27 +4,17 @@
 #   source ./bash-hook.sh
 #   guardaian-on
 #
-# The shell prompt is tagged with "(guardaian)" while active and restored when disabled.
+# First Enter: evaluate command risk. Safe commands execute automatically.
+# Risky commands enter pending state and require a second-step confirmation.
 
 export GUARDAIAN_ORIGINAL_PS1="${GUARDAIAN_ORIGINAL_PS1:-${PS1:-}}"
-
-__guardaian_debug() {
-  [[ -n "${GUARDAIAN_DEBUG:-}" ]] || return 0
-  printf '[guardaian][debug] %s\n' "$*" >&2
-}
-
-__guardaian_enable_prompt_wrapper() {
-  __guardaian_debug "enable_prompt_wrapper: before PROMPT_COMMAND='${PROMPT_COMMAND-}'"
-  if [[ "${PROMPT_COMMAND:-}" != "__guardaian_prompt_command" ]]; then
-    export GUARDAIAN_ORIGINAL_PROMPT_COMMAND="${PROMPT_COMMAND:-}"
-  fi
-  PROMPT_COMMAND='__guardaian_prompt_command'
-  __guardaian_debug "enable_prompt_wrapper: after PROMPT_COMMAND='${PROMPT_COMMAND-}'"
-}
+export GUARDAIAN_ORIGINAL_PROMPT_COMMAND="${GUARDAIAN_ORIGINAL_PROMPT_COMMAND:-${PROMPT_COMMAND:-}}"
+export GUARDAIAN_ROOT="${GUARDAIAN_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)}"
+export GUARDAIAN_BIN="${GUARDAIAN_BIN:-${GUARDAIAN_ROOT}/guard}"
 
 __guardaian_prompt() {
   if [[ -n "${GUARDAIAN_ACTIVE:-}" && -n "${GUARDAIAN_PENDING_CMD:-}" ]]; then
-    PS1="confirm yes> "
+    PS1="${GUARDAIAN_ORIGINAL_PS1} (guardaian:confirm) "
     return
   fi
   if [[ -n "${GUARDAIAN_ACTIVE:-}" ]]; then
@@ -35,19 +25,18 @@ __guardaian_prompt() {
 }
 
 __guardaian_prompt_command() {
-  __guardaian_debug "prompt_command: active='${GUARDAIAN_ACTIVE-}' pending='${GUARDAIAN_PENDING_CMD-}' PS1='${PS1-}'"
-  if [[ -n "${GUARDAIAN_ACTIVE:-}" && -n "${GUARDAIAN_PENDING_CMD:-}" ]]; then
-    PS1=""
-    printf 'confirm yes> '
-    __guardaian_debug "prompt_command: pending prompt printed"
-    return
-  fi
-
   if [[ -n "${GUARDAIAN_ORIGINAL_PROMPT_COMMAND:-}" ]]; then
     eval "${GUARDAIAN_ORIGINAL_PROMPT_COMMAND}"
   fi
 
   __guardaian_prompt
+}
+
+__guardaian_enable_prompt_wrapper() {
+  if [[ "${PROMPT_COMMAND:-}" != "__guardaian_prompt_command" ]]; then
+    export GUARDAIAN_ORIGINAL_PROMPT_COMMAND="${PROMPT_COMMAND:-}"
+  fi
+  PROMPT_COMMAND='__guardaian_prompt_command'
 }
 
 __guardaian_is_internal_command() {
@@ -65,7 +54,6 @@ __guardaian_is_internal_command() {
 __guardaian_accept_line() {
   local cmd status
   cmd="${READLINE_LINE}"
-  __guardaian_debug "accept_line: raw='${cmd}' pending='${GUARDAIAN_PENDING_CMD-}'"
 
   READLINE_LINE=""
   READLINE_POINT=0
@@ -73,26 +61,15 @@ __guardaian_accept_line() {
   # Emulate normal Enter behavior: move to a new output line first.
   printf '\n'
 
+  # Second step: consume user response for a pending risky command.
   if [[ -n "${GUARDAIAN_PENDING_CMD:-}" ]]; then
-    __guardaian_debug "accept_line: handling pending response='${cmd}'"
     if [[ "${cmd}" == "yes" ]]; then
       history -s -- "$GUARDAIAN_PENDING_CMD"
       eval -- "$GUARDAIAN_PENDING_CMD"
-      __guardaian_debug "accept_line: pending command executed"
     else
       printf 'Execution blocked.\n' >&2
-      __guardaian_debug "accept_line: pending command blocked"
     fi
     unset GUARDAIAN_PENDING_CMD
-    if [[ -n "${GUARDAIAN_SAVED_PS1:-}" ]]; then
-      PS1="${GUARDAIAN_SAVED_PS1}"
-      unset GUARDAIAN_SAVED_PS1
-    fi
-    if [[ -n "${GUARDAIAN_SAVED_PROMPT_COMMAND+set}" ]]; then
-      PROMPT_COMMAND="${GUARDAIAN_SAVED_PROMPT_COMMAND}"
-      unset GUARDAIAN_SAVED_PROMPT_COMMAND
-    fi
-    __guardaian_debug "accept_line: pending exit PS1='${PS1-}' PROMPT_COMMAND='${PROMPT_COMMAND-}'"
     __guardaian_prompt
     return 0
   fi
@@ -104,7 +81,6 @@ __guardaian_accept_line() {
   history -s -- "$cmd"
 
   if __guardaian_is_internal_command "$cmd"; then
-    __guardaian_debug "accept_line: internal command='${cmd}'"
     eval -- "$cmd"
     __guardaian_prompt
     return 0
@@ -112,46 +88,41 @@ __guardaian_accept_line() {
 
   printf 'Evaluating: %s\n' "$cmd"
 
-
-  /home/robert/git/guardaian/guard --check-only -- "$cmd"
+  # First step: evaluate risk only.
+  "${GUARDAIAN_BIN}" --check-only -- "$cmd"
   status=$?
-  __guardaian_debug "accept_line: guard status=${status}"
 
   if [[ $status -eq 20 ]]; then
     export GUARDAIAN_PENDING_CMD="$cmd"
     printf 'Type yes and press Enter to continue, or type anything else to cancel.\n'
-    printf 'confirm yes> (waiting for your response on the next line)\n'
-    __guardaian_debug "accept_line: entered pending mode"
     return 0
   elif [[ $status -ne 0 ]]; then
     printf 'Command blocked by guardaian.\n' >&2
-    __guardaian_debug "accept_line: command blocked by guard status=${status}"
     return 0
   fi
 
+  # Safe command: execute immediately on first Enter.
   eval -- "$cmd"
-  __guardaian_debug "accept_line: command executed immediately"
 }
 
 __guardaian_install_bindings() {
   [[ $- == *i* ]] || return 0
   bind -x '"\C-m":__guardaian_accept_line'
   bind -x '"\eOM":__guardaian_accept_line'
-  __guardaian_debug "install_bindings: done"
 }
 
 __guardaian_uninstall_bindings() {
   [[ $- == *i* ]] || return 0
   bind '"\C-m":accept-line'
   bind '"\eOM":accept-line'
-  __guardaian_debug "uninstall_bindings: done"
 }
 
 __guardaian_disable() {
   unset GUARDAIAN_ACTIVE
+  unset GUARDAIAN_PENDING_CMD
   PS1="${GUARDAIAN_ORIGINAL_PS1}"
+  PROMPT_COMMAND="${GUARDAIAN_ORIGINAL_PROMPT_COMMAND:-}"
   __guardaian_uninstall_bindings
-  __guardaian_debug "disabled: PS1='${PS1-}' PROMPT_COMMAND='${PROMPT_COMMAND-}'"
   printf '[guardaian] disabled\n'
 }
 
@@ -165,7 +136,6 @@ guardaian-off() {
 
 guardaian-on() {
   if [[ -n "${GUARDAIAN_ACTIVE:-}" ]]; then
-    __guardaian_debug "on: already active"
     __guardaian_enable_prompt_wrapper
     __guardaian_install_bindings
     __guardaian_prompt
@@ -178,7 +148,6 @@ guardaian-on() {
   __guardaian_enable_prompt_wrapper
   __guardaian_install_bindings
   __guardaian_prompt
-  __guardaian_debug "on: activated PS1='${PS1-}' PROMPT_COMMAND='${PROMPT_COMMAND-}'"
   printf '[guardaian] enabled\n'
 }
 

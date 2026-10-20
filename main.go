@@ -17,7 +17,7 @@ import (
 )
 
 const defaultModel = "tev1:0.8b"
-const defaultThreshold = 0.75
+const defaultThreshold = 0.5
 const defaultURL = "http://localhost:11434"
 const exitCodeConfirmationRequired = 20
 
@@ -27,10 +27,6 @@ type config struct {
 	URL       string
 	Timeout   time.Duration
 	CheckOnly bool
-}
-
-type ollamaResponse struct {
-	Response string `json:"response"`
 }
 
 func main() {
@@ -80,7 +76,7 @@ func main() {
 
 	fmt.Printf("Risk score: %.2f (threshold %.2f)\n", score, cfg.Threshold)
 
-	if score < cfg.Threshold {
+	if !shouldAskForConfirmation(score, cfg.Threshold) {
 		fmt.Println("Command allowed by policy.")
 		if !shouldExecuteCommand(cfg.CheckOnly, score, cfg.Threshold, true) {
 			return
@@ -117,12 +113,20 @@ func evaluateRisk(cfg config, command string) (float64, error) {
 		"model": cfg.Model,
 		"state": command,
 		"questions": map[string]any{
-			"dangerous": map[string]any{
+			"modifies_filesystem": map[string]any{
 				"type":         "noul",
-				"instructions": "Does this command appear dangerous, destructive, or likely to cause harm?",
+				"instructions": "Does this command modify filesystem state directly or indirectly? Include redirections, in-place flags, and invoked tools/scripts. Pure read/list/inspect commands should be false.",
 				"criteria": map[string]string{
-					"true":  "The command is dangerous or destructive.",
-					"false": "The command is benign or low risk.",
+					"true":  "The command can create, modify, overwrite, append, truncate, rename, delete, or change metadata/permissions.",
+					"false": "The command is strictly read-only and does not alter filesystem data or metadata (examples: ls, cat, head, tail, grep without -i in-place edits).",
+				},
+			},
+			"destructive_or_hard_to_rollback": map[string]any{
+				"type":         "noul",
+				"instructions": "Can this command cause irreversible loss, broad disruption, or difficult rollback? Base this on actual side effects. If the command is clearly read-only, this should be false.",
+				"criteria": map[string]string{
+					"true":  "Potential for data loss, broad deletion, service disruption, security-impacting changes, or difficult recovery.",
+					"false": "No meaningful destructive impact and easy rollback.",
 				},
 			},
 		},
@@ -157,35 +161,39 @@ func evaluateRisk(cfg config, command string) (float64, error) {
 		return 0, err
 	}
 
-	score, ok := extractSystemOneScore(result.Answers)
+	writeScore, ok := extractNamedSystemOneScore(result.Answers, "modifies_filesystem")
 	if !ok {
-		return 0, fmt.Errorf("model response did not include a noul answer")
+		return 0, fmt.Errorf("model response did not include modifies_filesystem noul answer")
 	}
-	if score < 0 || score > 1 {
-		return 0, fmt.Errorf("model returned an invalid score %v", score)
+	destructiveScore, ok := extractNamedSystemOneScore(result.Answers, "destructive_or_hard_to_rollback")
+	if !ok {
+		return 0, fmt.Errorf("model response did not include destructive_or_hard_to_rollback noul answer")
 	}
-	return score, nil
+	if writeScore < 0 || writeScore > 1 {
+		return 0, fmt.Errorf("model returned an invalid modifies_filesystem score %v", writeScore)
+	}
+	if destructiveScore < 0 || destructiveScore > 1 {
+		return 0, fmt.Errorf("model returned an invalid destructive_or_hard_to_rollback score %v", destructiveScore)
+	}
+
+	return combineRisk(writeScore, destructiveScore), nil
 }
 
-func extractSystemOneScore(answers map[string]map[string]any) (float64, bool) {
-	for _, answer := range answers {
-		if value, ok := answer["noul"]; ok {
-			switch v := value.(type) {
-			case float64:
-				return v, true
-			case float32:
-				return float64(v), true
-			case int:
-				return float64(v), true
-			case string:
-				parsed, err := strconv.ParseFloat(v, 64)
-				if err == nil {
-					return parsed, true
-				}
-			}
-		}
+func extractNamedSystemOneScore(answers map[string]map[string]any, key string) (float64, bool) {
+	answer, ok := answers[key]
+	if !ok {
+		return 0, false
 	}
-	return 0, false
+
+	return extractNoulFromAnswerMap(answer)
+}
+
+func combineRisk(modifiesFilesystem, destructive float64) float64 {
+	risk := modifiesFilesystem * (1 + 0.5*destructive)
+	if risk > 1 {
+		return 1
+	}
+	return risk
 }
 
 func extractNumberFromAny(value any) (float64, bool) {
@@ -231,7 +239,7 @@ func extractScore(raw string) float64 {
 			if answers, ok := answersValue.(map[string]any); ok {
 				for _, answer := range answers {
 					if answerMap, ok := answer.(map[string]any); ok {
-						if score, ok := extractSystemOneScore(mapify(answerMap)); ok {
+						if score, ok := extractNoulFromAnswerMap(answerMap); ok {
 							return score
 						}
 					}
@@ -255,14 +263,12 @@ func extractScore(raw string) float64 {
 	return 0
 }
 
-func mapify(input map[string]any) map[string]map[string]any {
-	out := make(map[string]map[string]any, len(input))
-	for key, value := range input {
-		if nested, ok := value.(map[string]any); ok {
-			out[key] = nested
-		}
+func extractNoulFromAnswerMap(answer map[string]any) (float64, bool) {
+	value, ok := answer["noul"]
+	if !ok {
+		return 0, false
 	}
-	return out
+	return extractNumberFromAny(value)
 }
 
 func shouldAskForConfirmation(score, threshold float64) bool {

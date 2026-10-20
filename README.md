@@ -8,7 +8,7 @@ A small Go wrapper that asks a local Ollama decision model to score the risk of 
 - Evaluates a risk score between 0.0 and 1.0.
 - Allows execution when the score is below the configured threshold.
 - Requires a typed `yes` confirmation when the score is at or above the threshold.
-- Can be used as a one-off CLI or ideally as a Bash pre-exec hook.
+- Can be used as a one-off CLI or as an interactive Bash Return-key hook.
 
 ## Prerequisites
 
@@ -54,7 +54,7 @@ Install the hook in your current interactive Bash session:
 source ./guard-shell
 ```
 
-This enables the guard and tags the prompt with `(guardaian)` while active.
+This enables the guard and adjusts the prompt state while active.
 
 To disable it later:
 
@@ -68,7 +68,14 @@ To re-enable it:
 guardaian-on
 ```
 
-The hook uses a Readline Return-key hook. When you press Enter, it evaluates the current line first and only executes it if policy allows it. This preserves normal Bash completion and aliases while adding a reliable approval gate for interactive commands.
+The hook uses a Readline Return-key hook and a two-step flow:
+
+- First Enter: evaluate command risk.
+- If safe: execute immediately.
+- If risky: switch to confirmation state.
+- Second Enter: `yes` executes, anything else blocks.
+
+This preserves normal Bash completion and aliases while adding a reliable approval gate for interactive commands.
 
 It supports normal command lines, including redirection forms like:
 
@@ -76,7 +83,13 @@ It supports normal command lines, including redirection forms like:
 ls -l >myls.txt
 ```
 
-The hook runs the guard in `--check-only` mode and executes the line in the current shell only after a successful policy check. High-risk commands require an explicit `yes`; otherwise they are blocked.
+The hook runs the guard in `--check-only` mode and executes in the current shell only after a successful policy check. High-risk commands require explicit confirmation (`yes` on the second step); otherwise they are blocked.
+
+Prompt states:
+
+- Active normal mode: prompt contains `(guardaian)`.
+- Active confirmation mode: prompt contains `(guardaian:confirm)`.
+- Disabled mode: normal shell prompt.
 
 ## One-off CLI usage
 

@@ -38,3 +38,17 @@ func TestShouldExecuteConfirmedCommand(t *testing.T) {
 		t.Fatal("expected automatic execution when the score is below threshold")
 	}
 }
+
+func TestCombineRiskReadOnlyStaysLow(t *testing.T) {
+	got := combineRisk(0.10, 0.90)
+	if got > 0.2 {
+		t.Fatalf("combineRisk() = %v, expected low score for likely read-only command", got)
+	}
+}
+
+func TestCombineRiskDestructiveWriteElevates(t *testing.T) {
+	got := combineRisk(0.80, 0.90)
+	if got <= 0.8 {
+		t.Fatalf("combineRisk() = %v, expected destructive signal to elevate write risk", got)
+	}
+}
